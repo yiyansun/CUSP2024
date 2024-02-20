@@ -1,0 +1,79 @@
+---
+title: "dataload"
+author: "yiyan Sun"
+date: "2024-02-20"
+output: html_document
+---
+
+```{r}
+library(openair)
+library(tidyverse)
+```
+
+```{r}
+aurn_meta <- importMeta(source = "aurn")
+aurn_meta
+```
+```{r}
+aurn_meta <- importMeta(source = "aurn", all = TRUE) 
+
+# what comes back?
+glimpse(aurn_meta)
+
+```
+
+```{r}
+sites_2010_2022 <- importMeta(
+  source = c("aurn", "saqn"),
+  year = 2010:2022
+)
+
+nrow(sites_2010_2022)
+```
+
+```{r}
+aurn_detailed <- importMeta(source = "aurn", all = TRUE)
+
+no2_sites <- filter(
+  aurn_detailed,
+  variable == "NO2",
+  site_type == "Urban Traffic"
+)
+
+nrow(no2_sites)
+```
+
+```{r}
+sites_2005_2020 <- importMeta(
+  source = "aurn",
+  year = 2005:2020
+)
+
+all_aq_data <- importAURN(
+  site = sites_2005_2020$code,
+  year = 2005:2020
+)
+```
+
+```{r}
+## import all pollutants from Marylebone Rd from 2000:2005
+mary <- importAURN(site = "my1", year = 2000:2005)
+
+## import nox, no2, o3 from Marylebone Road and Nottingham Centre for 2000
+thedata <- importAURN(site = c("my1", "nott"), year = 2000,
+                      pollutant = c("nox", "no2", "o3"))
+
+## import over 30 years of Mace Head O3 data!
+o3 <- importAURN(site = "mh", year = 1987:2019)
+
+## import hydrocarbon data from Marylebone Road
+hc <- importAURN(site = "my1", year = 2008, hc = TRUE)
+
+## Import data from the AQE network (York data in this case)
+yk13 <- importAQE(site = "yk13", year = 2018)
+```
+
+```{r}
+my1 <- importAURN("my1", year = 2018, to_narrow = TRUE)
+```
+
