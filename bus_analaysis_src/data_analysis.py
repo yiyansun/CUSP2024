@@ -1,6 +1,8 @@
 import os
 import rasterio
 import numpy as np
+import pandas as pd
+import geopandas as gpd
 
 
 def stitch_rasters(raster_paths: list[str]) -> np.ndarray:
@@ -153,14 +155,32 @@ def aggergate_by_hour(dates: dict) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    raster_meta = rasterio.open(
-        get_raster_path_by_time(2023, 12, 7, 0, type="count")
-    ).meta
-    protest_raster = stitch_rasters(
-        get_raster_path_by_time(2023, 11, 25, hour, type="count") for hour in range(24)
-    ).sum(axis=0)
+    # protest_raster = stitch_rasters(
+    #     get_raster_path_by_time(2023, 12, 16, hour, type="count") for hour in range(24)
+    # ).sum(axis=0)
 
-    comparison_dates = {2023: {11: [4, 11, 18], 12: [2, 9, 16]}}
-    comparison_agg = aggergate_by_day(comparison_dates)
-    pct_diff = calculate_pct_difference(protest_raster, comparison_agg)
-    save_raster(pct_diff, raster_meta, "road_closure.tif")
+    # comparison_dates = {2023: {12: [2, 9, 23, 30]}}
+    # comparison_agg = aggergate_by_day(comparison_dates)
+    # pct_diff = calculate_pct_difference(protest_raster, comparison_agg)
+    # save_raster(pct_diff, raster_meta, "road_closure.tif")
+
+    pollution_df = pd.read_csv("data/Waterloo_CE2.csv")
+
+    raster_path = get_raster_path_by_time(2023, 12, 7, 12, type="count")
+    with rasterio.open(raster_path, "r") as src:
+        raster_meta = src.meta
+        transform = src.transform
+        raster_arr = src.read(1)
+    raster_crs = src.meta["crs"]
+    # read geojson as gdf
+    gdf = gpd.read_file("waterloo_sensor.geojson")
+    # Convert crs of gpd
+    gdf = gdf.to_crs(raster_crs)
+
+    # Get the values of the raster at the points
+    row, col = rasterio.transform.rowcol(transform, gdf.geometry.x, gdf.geometry.y)
+    print(row, col)
+
+    arr = np.zeros(raster_arr.shape)
+    arr[row, col] = 1
+    save_raster(arr, raster_meta, "test.tif", dtype="int32")

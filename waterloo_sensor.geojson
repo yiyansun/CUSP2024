@@ -1,0 +1,13 @@
+{
+    "type": "Feature",
+    "geometry": {
+        "type": "Point",
+        "coordinates": [
+            -0.133068372704093,
+            51.5075819137762
+        ]
+    },
+    "properties": {
+        "name": "Waterloo Sensor"
+    }
+}
