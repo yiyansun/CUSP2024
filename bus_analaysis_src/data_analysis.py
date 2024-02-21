@@ -75,8 +75,10 @@ def calculate_pct_difference(
                 result_arr[row, col] = -1
             else:
                 result_arr[row, col] = (
-                    change_arr[row, col] - source_arr[row, col] / source_arr[row, col]
+                    (change_arr[row, col] - source_arr[row, col]) / source_arr[row, col]
                 ) * 100
+            result_arr[row, col] = round(result_arr[row, col], 0)
+    return result_arr
 
 
 def save_raster(
@@ -121,7 +123,7 @@ def aggergate_by_day(dates: dict, aggregation_method="sum") -> np.ndarray:
                     result_arr = day_aggregate
                 else:
                     result_arr = np.concatenate([result_arr, day_aggregate])
-    return result_arr
+    return result_arr.mean(axis=0)
 
 
 def aggergate_by_hour(dates: dict) -> np.ndarray:
@@ -154,3 +156,11 @@ if __name__ == "__main__":
     raster_meta = rasterio.open(
         get_raster_path_by_time(2023, 12, 7, 0, type="count")
     ).meta
+    protest_raster = stitch_rasters(
+        get_raster_path_by_time(2023, 11, 25, hour, type="count") for hour in range(24)
+    ).sum(axis=0)
+
+    comparison_dates = {2023: {11: [4, 11, 18], 12: [2, 9, 16]}}
+    comparison_agg = aggergate_by_day(comparison_dates)
+    pct_diff = calculate_pct_difference(protest_raster, comparison_agg)
+    save_raster(pct_diff, raster_meta, "road_closure.tif")
