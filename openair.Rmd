@@ -11,14 +11,15 @@ library(tidyverse)
 ```
 
 ```{r}
-aurn_meta <- importMeta(source = "aurn")
-aurn_meta
+aurn_meta <- importMeta(source = "aurn", all = TRUE)
+
+london_rows <- aurn_meta[grep("London", aurn_meta$site, ignore.case = TRUE), ]
+
+print(london_rows)
+
 ```
 ```{r}
-aurn_meta <- importMeta(source = "aurn", all = TRUE) 
 
-# what comes back?
-glimpse(aurn_meta)
 
 ```
 
