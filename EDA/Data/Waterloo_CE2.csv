@@ -1,4 +1,4 @@
-MeasurementDateGMT,Waterloo Place (The Crown Estate): PM2.5 Particulate (ug/m3),Waterloo Place (The Crown Estate): PM10 Particulate (ug/m3),Waterloo Place (The Crown Estate): Ozone (ug/m3),Waterloo Place (The Crown Estate): Nitrogen Dioxide (ug/m3)
+time,PM2.5 Particulate (ug/m3),PM10 Particulate (ug/m3),Ozone (ug/m3),Nitrogen Dioxide (ug/m3)
 2023/10/27 0:00,7.6,11.8,,43.5
 2023/10/27 1:00,7.2,11.3,,44.8
 2023/10/27 2:00,7,11.2,,38.6

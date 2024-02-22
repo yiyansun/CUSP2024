@@ -8,6 +8,9 @@ output: html_document
 ```{r}
 library(openair)
 library(tidyverse)
+library(openairmaps)
+library(worldmet)
+
 ```
 
 ```{r}
@@ -18,67 +21,115 @@ london_rows <- aurn_meta[grep("London", aurn_meta$site, ignore.case = TRUE), ]
 print(london_rows)
 
 ```
+
 ```{r}
-
-
+networkMap(source = "aurn", control = "site_type")
 ```
 
 ```{r}
-sites_2010_2022 <- importMeta(
-  source = c("aurn", "saqn"),
-  year = 2010:2022
+getMeta(lat = 53.3, lon = -0.3, returnMap = TRUE)
+```
+
+
+```{r}
+getMeta()
+```
+```{r}
+dublin_met <- importNOAA(code = "039690-99999", year = 2019)
+
+# first few lines of data
+dublin_met
+```
+
+```{r}
+windRose(dublin_met)
+```
+
+```{r}
+# import some air quality data and check the variables that exist
+
+aq_2019 <- importAURN(site = "kc1", year = 2019)
+names(aq_2019) # ws, wd, air_temp already exist from WRF model
+
+# import some met data - default is London Heathrow
+met_2019 <- importNOAA(year = 2019)
+
+# merge the two data sets but not ws, wd, air_temp from aq data
+aq_met <- left_join(
+  select(aq_2019, -ws, -wd, -air_temp),
+  met_2019,
+  by = "date"
 )
 
-nrow(sites_2010_2022)
+names(aq_met)
 ```
 
 ```{r}
-aurn_detailed <- importMeta(source = "aurn", all = TRUE)
-
-no2_sites <- filter(
-  aurn_detailed,
-  variable == "NO2",
-  site_type == "Urban Traffic"
-)
-
-nrow(no2_sites)
+windRose(mydata, type = "year", layout = c(4, 2))
 ```
 
 ```{r}
-sites_2005_2020 <- importMeta(
-  source = "aurn",
-  year = 2005:2020
-)
+windRose(mydata, type = "pm10", layout = c(4, 1))
+```
 
-all_aq_data <- importAURN(
-  site = sites_2005_2020$code,
-  year = 2005:2020
+```{r}
+pollutionRose(mydata, pollutant = "nox")
+```
+```{r}
+pollutionRose(mydata,
+  pollutant = "nox",
+  type = "so2",
+  layout = c(4, 1),
+  key.position = "bottom"
 )
 ```
 
 ```{r}
-## import all pollutants from Marylebone Rd from 2000:2005
-mary <- importAURN(site = "my1", year = 2000:2005)
-
-## import nox, no2, o3 from Marylebone Road and Nottingham Centre for 2000
-thedata <- importAURN(site = c("my1", "nott"), year = 2000,
-                      pollutant = c("nox", "no2", "o3"))
-
-## import over 30 years of Mace Head O3 data!
-o3 <- importAURN(site = "mh", year = 1987:2019)
-
-## import hydrocarbon data from Marylebone Road
-hc <- importAURN(site = "my1", year = 2008, hc = TRUE)
-
-## Import data from the AQE network (York data in this case)
-yk13 <- importAQE(site = "yk13", year = 2018)
+pollutionRose(mydata, pollutant = "nox", statistic = "prop.mean")
 ```
 
 ```{r}
-my1 <- importAURN("my1", year = 2018, to_narrow = TRUE)
+pollutionRose(mydata,
+  pollutant = "so2",
+  normalise = TRUE,
+  seg = 1,
+  cols = "heat"
+)
 ```
 
 ```{r}
+## $example of comparing 2 met sites
+## first we will make some new ws/wd data with a postive bias
+mydata <- mutate(mydata,
+  ws2 = ws + 2 * rnorm(nrow(mydata)) + 1,
+  wd2 = wd + 30 * rnorm(nrow(mydata)) + 30
+)
 
+## need to correct negative wd
+id <- which(mydata$wd2 < 0)
+mydata$wd2[id] <- mydata$wd2[id] + 360
+
+## results show postive bias in wd and ws
+pollutionRose(mydata,
+  ws = "ws",
+  wd = "wd",
+  ws2 = "ws2",
+  wd2 = "wd2"
+)
+```
+
+```{r}
+## add some wd bias to some nighttime hours
+id <- which(as.numeric(format(mydata$date, "%H")) %in% c(23, 1, 2, 3, 4, 5))
+mydata$wd2[id] <- mydata$wd[id] + 30 * rnorm(length(id)) + 120
+id <- which(mydata$wd2 < 0)
+mydata$wd2[id] <- mydata$wd2[id] + 360
+
+pollutionRose(mydata,
+  ws = "ws", wd = "wd", ws2 = "ws2", wd2 = "wd2",
+  breaks = c(-11, -2, -1, -0.5, 0.5, 1, 2, 11),
+  cols = c("dodgerblue4", "white", "firebrick"),
+  type = "daylight"
+  )
 ```
 
