@@ -201,7 +201,7 @@ def get_all_speed_data() -> np.ndarray:
                     with rasterio.open(raster_path, "r") as src:
                         raster_arr = src.read(1)
                 except:
-                    print(f"Skipping: {month}/{day}/{hour}")
+                    # print(f"Skipping: {month}/{day}/{hour}")
                     if month == 12:
                         # make array of -2
                         raster_arr = np.full((src.height, src.width), -2)
@@ -220,7 +220,7 @@ def get_all_speed_data() -> np.ndarray:
                     with rasterio.open(raster_path, "r") as src:
                         raster_arr = src.read(1)
                 except:
-                    print(f"Skipping: {month}/{day}/{hour}")
+                    # print(f"Skipping: {month}/{day}/{hour}")
                     continue
                 full_arr.append(raster_arr)
     full_arr = np.array(full_arr)
@@ -305,13 +305,65 @@ def get_site_data_frame(
 
 
 if __name__ == "__main__":
+    with rasterio.open(
+        "/home/mattbarker/projects/cusp_data_drive/CUSP2024/data/london_bus_data/averageSpeeds_London_011223to080124/1/2/2024010200_3600_50.gtiff",
+        "r",
+    ) as f:
+        raster_crs = f.meta["crs"]
+        transform = f.meta["transform"]
     sensor_dict = get_sensor_locations("sensors.json")
+    speed_data = get_all_speed_data()[:-23, :, :]
     # merged_df = merge_air_quality_csvs("data/air_quality_csvs")
     # merged_df.to_csv("data/merged_air_quality.csv", index=False)
     air_pollution_df = pd.read_csv("data/merged_air_quality.csv")
     air_pollution_df = air_pollution_df.set_index("date_time")
+    correlation_dict = {}
+    for site_code in sensor_dict:
+        try:
+            no2_df = get_site_data_frame(site_code, "NO2", air_pollution_df)
+            site_lat_long = sensor_dict[site_code]
+            site_row, site_col = get_sensor_cell_locations(
+                site_lat_long[0], site_lat_long[1], raster_crs, transform
+            )
+            site_speed_data = speed_data[:, site_row, site_col]
+            no2_df["speed_data"] = site_speed_data
+            # Set -1 to nan
+            no2_df = no2_df.replace(-1, np.nan)
+            no2_df = no2_df.replace(-2, np.nan)
+            drop_nans = no2_df.dropna()
+            if len(drop_nans) < 100:
+                continue
+            # get lagged pollution
+            no2_df["NO2_lag1"] = no2_df[f"{site_code}_NO2"].shift(1)
 
-    ce3_no2 = get_site_data_frame("CE3", "NO2", air_pollution_df)
-    print(ce3_no2)
-    ce3_no2.plot()
+            correlation = no2_df.corr()
+            # Get correlation between speed and pollution
+            speed_no_lag_corr = correlation["speed_data"][f"{site_code}_NO2"]
+            speed_lag_corr = correlation["speed_data"]["NO2_lag1"]
+            correlation_dict[site_code] = {
+                "speed_no_lag_corr": speed_no_lag_corr,
+                "speed_lag_corr": speed_lag_corr,
+            }
+        except:
+            print(f"Failed for site: {site_code}")
+            continue
+
+    correlation_df = pd.DataFrame(correlation_dict).T
+    print(correlation_df)
+    # save to csv
+    correlation_df.to_csv("data/correlation.csv")
+
+    # get wm6 no2 data
+    wm6_no2 = get_site_data_frame("WM6", "NO2", air_pollution_df)
+    wm6_lat_long = sensor_dict["WM6"]
+    wm6_row, wm6_col = get_sensor_cell_locations(
+        wm6_lat_long[0], wm6_lat_long[1], raster_crs, transform
+    )
+    wm6_speed_data = speed_data[:, wm6_row, wm6_col]
+    wm6_no2["speed_data"] = wm6_speed_data
+    wm6_no2 = wm6_no2.replace(-1, np.nan)
+    wm6_no2 = wm6_no2.replace(-2, np.nan)
+    wm6_no2 = wm6_no2.dropna()
+    wm6_no2.to_csv("data/wm6_no2.csv")
+    wm6_no2.plot()
     plt.show()
