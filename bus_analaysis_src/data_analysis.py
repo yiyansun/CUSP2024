@@ -2,7 +2,9 @@ import os
 import rasterio
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import geopandas as gpd
+from statsmodels.tsa.arima.model import ARIMA
 
 
 def stitch_rasters(raster_paths: list[str]) -> np.ndarray:
@@ -94,9 +96,9 @@ def save_raster(
         path (str): path to save the raster
         dtype (str, optional): data type of the raster. Defaults to "float32".
     """
-    meta.update({"count": 1, "dtype": dtype})
+    meta.update({"dtype": dtype})
     with rasterio.open(path, "w", **meta) as dst:
-        dst.write(data, 1)
+        dst.write(data)
 
 
 def aggergate_by_day(dates: dict, aggregation_method="sum") -> np.ndarray:
@@ -154,33 +156,71 @@ def aggergate_by_hour(dates: dict) -> np.ndarray:
     return result_arr.mean(axis=0)
 
 
-if __name__ == "__main__":
-    # protest_raster = stitch_rasters(
-    #     get_raster_path_by_time(2023, 12, 16, hour, type="count") for hour in range(24)
-    # ).sum(axis=0)
+def get_sensor_cell_locations(
+    lat: int, long: int, raster_crs: rasterio.crs.CRS
+) -> tuple[int, int]:
+    """_summary_
 
-    # comparison_dates = {2023: {12: [2, 9, 23, 30]}}
-    # comparison_agg = aggergate_by_day(comparison_dates)
-    # pct_diff = calculate_pct_difference(protest_raster, comparison_agg)
-    # save_raster(pct_diff, raster_meta, "road_closure.tif")
+    Args:
+        lat (int): _description_
+        long (int): _description_
+        raster_crs (rasterio.crs.CRS): _description_
 
-    pollution_df = pd.read_csv("data/Waterloo_CE2.csv")
-
-    raster_path = get_raster_path_by_time(2023, 12, 7, 12, type="count")
-    with rasterio.open(raster_path, "r") as src:
-        raster_meta = src.meta
-        transform = src.transform
-        raster_arr = src.read(1)
-    raster_crs = src.meta["crs"]
-    # read geojson as gdf
-    gdf = gpd.read_file("waterloo_sensor.geojson")
-    # Convert crs of gpd
+    Returns:
+        tuple[int, int]: _description_
+    """
+    # Make geodf from lat long
+    gdf = gpd.GeoDataFrame(geometry=gpd.points_from_xy([long], [lat]), crs="EPSG:4326")
+    # Convert to raster crs
     gdf = gdf.to_crs(raster_crs)
-
     # Get the values of the raster at the points
     row, col = rasterio.transform.rowcol(transform, gdf.geometry.x, gdf.geometry.y)
-    print(row, col)
+    return row[0], col[0]
 
-    arr = np.zeros(raster_arr.shape)
-    arr[row, col] = 1
-    save_raster(arr, raster_meta, "test.tif", dtype="int32")
+
+def get_all_speed_data() -> np.ndarray:
+    """Reads all of the hourly speed data into a numpy array.
+
+    Returns:
+        np.ndarray: array of shape (n_hours, height, width)
+    """
+    full_arr = []
+    # 2023 speed data
+    for month in [10, 11, 12]:
+        for day in range(1, 32):
+            for hour in range(24):
+                raster_path = get_raster_path_by_time(
+                    2023, month, day, hour, type="speed"
+                )
+                try:
+                    with rasterio.open(raster_path, "r") as src:
+                        raster_arr = src.read(1)
+                except:
+                    print(f"Skipping: {month}/{day}/{hour}")
+                    if month == 12:
+                        # make array of -2
+                        raster_arr = np.full((src.height, src.width), -2)
+                        full_arr.append(raster_arr)
+                    continue
+                full_arr.append(raster_arr)
+
+    # 2024 data
+    for month in range(1, 2):
+        for day in range(1, 32):
+            for hour in range(24):
+                raster_path = get_raster_path_by_time(
+                    2024, month, day, hour, type="speed"
+                )
+                try:
+                    with rasterio.open(raster_path, "r") as src:
+                        raster_arr = src.read(1)
+                except:
+                    print(f"Skipping: {month}/{day}/{hour}")
+                    continue
+                full_arr.append(raster_arr)
+    full_arr = np.array(full_arr)
+    return full_arr
+
+
+if __name__ == "__main__":
+    pass
