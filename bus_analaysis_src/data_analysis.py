@@ -1,4 +1,5 @@
 import os
+import json
 import rasterio
 import numpy as np
 import pandas as pd
@@ -157,7 +158,10 @@ def aggergate_by_hour(dates: dict) -> np.ndarray:
 
 
 def get_sensor_cell_locations(
-    lat: int, long: int, raster_crs: rasterio.crs.CRS
+    lat: int,
+    long: int,
+    raster_crs: rasterio.crs.CRS,
+    transform: rasterio.transform.Affine,
 ) -> tuple[int, int]:
     """_summary_
 
@@ -165,6 +169,7 @@ def get_sensor_cell_locations(
         lat (int): _description_
         long (int): _description_
         raster_crs (rasterio.crs.CRS): _description_
+        transform (rasterio.transform.Affine): _description_
 
     Returns:
         tuple[int, int]: _description_
@@ -222,5 +227,91 @@ def get_all_speed_data() -> np.ndarray:
     return full_arr
 
 
+def get_sensor_locations(sensor_json_path: str) -> dict:
+    """Reads in the json containing sensor information and returns a
+    dictionary of name: (lat, long) pairs.
+
+    Args:
+        sensor_json_path (str): path to sensor json.
+
+    Returns:
+        dict: dictionary of sensor name: (lat, long) pairs.
+    """
+
+    with open(sensor_json_path, "r") as f:
+        sensor_data = json.load(f)
+    sensor_locations = {}
+    for sensor in sensor_data["Sites"]["Site"]:
+        site_code = sensor["@SiteCode"]
+        lat = float(sensor["@Latitude"])
+        long = float(sensor["@Longitude"])
+        sensor_locations[site_code] = (lat, long)
+    return sensor_locations
+
+
+def create_sensor_geojson(output_path: str) -> None:
+    sensor_location_dict = get_sensor_locations("sensors.json")
+
+    # Save as gdf
+    sensor_gdf = gpd.GeoDataFrame(
+        geometry=gpd.points_from_xy(
+            [x[1] for x in sensor_location_dict.values()],
+            [x[0] for x in sensor_location_dict.values()],
+        )
+    )
+    sensor_gdf["site_code"] = sensor_location_dict.keys()
+    sensor_gdf.to_file(output_path, driver="GeoJSON")
+
+
+def merge_air_quality_csvs(path_to_folder: str) -> pd.DataFrame:
+    """Merges all of the air quality csvs in a folder into a single dataframe.
+
+    Args:
+        path_to_folder (str): _description_
+
+    Returns:
+        pd.DataFrame: _description_
+    """
+    merged_data = {}
+    for index, csv_file in enumerate(os.listdir(path_to_folder)):
+        current_df = pd.read_csv(os.path.join(path_to_folder, csv_file))
+        if index == 0:
+            merged_data["date_time"] = list(current_df["MeasurementDateGMT"])
+        # Get the column name
+        column_name = current_df.columns[-1]
+        if len(current_df[column_name]) < 1753:
+            continue
+        site_code = csv_file.split("_")[0]
+        pollutant = csv_file.split("_")[1]
+        merged_data[f"{site_code}_{pollutant}"] = list(current_df[column_name])
+    return pd.DataFrame(merged_data)
+
+
+def get_site_data_frame(
+    site_code: str, pollutant: str, air_pollution_df: pd.DataFrame
+) -> pd.DataFrame:
+    """Gets the data for a specific site from the air pollution dataframe.
+
+    Args:
+        site_code (str): _description_
+        air_pollution_df (pd.DataFrame): _description_
+
+    Returns:
+        pd.DataFrame: _description_
+    """
+    site_columns = [col for col in air_pollution_df.columns if site_code in col]
+    site_columns = [col for col in site_columns if pollutant in col]
+    return air_pollution_df[site_columns]
+
+
 if __name__ == "__main__":
-    pass
+    sensor_dict = get_sensor_locations("sensors.json")
+    # merged_df = merge_air_quality_csvs("data/air_quality_csvs")
+    # merged_df.to_csv("data/merged_air_quality.csv", index=False)
+    air_pollution_df = pd.read_csv("data/merged_air_quality.csv")
+    air_pollution_df = air_pollution_df.set_index("date_time")
+
+    ce3_no2 = get_site_data_frame("CE3", "NO2", air_pollution_df)
+    print(ce3_no2)
+    ce3_no2.plot()
+    plt.show()
